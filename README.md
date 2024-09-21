@@ -10,7 +10,7 @@ You can also schedule this script to update the firewall rules automatically.
 Just run the script and select your CDN and Firewall from the list:
 
 ```bash
-bash <(curl -sSkL https://github.com/arian24b/AllowCDN-IPs/raw/main/src/whitelister.sh)
+bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh)
 ```
 ```bash
 Select a CDN to add IPs:
@@ -33,7 +33,7 @@ Firewall: [YOUR INPUT]
 Also, you can pass the CDN's name and Firewall's name in arguments:
 
 ```bash
-bash <(curl -sSkL https://github.com/arian24b/AllowCDN-IPs/raw/main/src/whitelister.sh) cloudflare ufw
+bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh) cloudflare ufw
 ```
 
 ### Auto-update
@@ -45,13 +45,13 @@ Examples:
 * Update UFW rules every 6 hours
 
 ```bash
-0 */6 * * * bash <(curl -sSkL https://github.com/arian24b/AllowCDN-IPs/raw/main/src/whitelister.sh) cloudflare ufw >/dev/null 2>&1
+0 */6 * * * bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh) cloudflare ufw >/dev/null 2>&1
 ```
 
 * Update CSF rules every day at 1:00
 
 ```bash
-0 1 * * * bash <(curl -sSkL https://github.com/arian24b/AllowCDN-IPs/raw/main/src/whitelister.sh) arvancloud csf >/dev/null 2>&1
+0 1 * * * bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh) arvancloud csf >/dev/null 2>&1
 ```
 
 ## Supported CDNs
