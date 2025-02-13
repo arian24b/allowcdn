@@ -74,4 +74,4 @@ bash <(curl -sSkL https://github.com/arian24b/allowcdn/raw/main/src/whitelister.
 
 ## زبان‌های دیگر
 
-برای نسخه اینگلیسی این مستند، لطفاً به [README.md](/home/arian/code/allowcdn/README.md) مراجعه کنید.
+برای نسخه اینگلیسی این مستند، لطفاً به [English](https://github.com/arian24b/allowcdn/blob/main/README.md) مراجعه کنید.

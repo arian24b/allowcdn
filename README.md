@@ -74,4 +74,4 @@ If your firewall is not listed, you can open an issue or submit a pull request t
 
 ## Other Languages
 
-For a Farsi version of this document, please see [README_fa.md](/home/arian/code/allowcdn/README_fa.md).
+For a Farsi version of this document, please see [فارسی](https://github.com/arian24b/allowcdn/blob/main/README_fa.md).
