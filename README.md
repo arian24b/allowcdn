@@ -1,24 +1,25 @@
-# White-List CDN's IPs in firewall
+# Whitelist CDN IPs in Your Server Firewall
 
+This project automatically updates your firewall configuration to allow access from various CDN networks. You can run the script manually or schedule it to update the rules regularly.
 
-This project modifies your firewall configuration to allow many CDN's IP network access to your server.
+## How to Use
 
-You can also schedule this script to update the firewall rules automatically.
-
-## How to use
-
-Just run the script and select your CDN and Firewall from the list:
+Run the script and choose your CDN and firewall from the list:
 
 ```bash
-bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh)
+bash <(curl -sSkL https://github.com/arian24b/allowcdn/raw/main/src/whitelister.sh)
 ```
+
+After running the script, you will see prompts similar to:
+
 ```bash
 Select a CDN to add IPs:
    1) cloudflare
    2) iranserver
    3) arvancloud
-CDN: [YOUR INPUT]
+CDN: [Enter your choice]
 ```
+
 ```bash
 Select a firewall to add IPs:
    1) UFW
@@ -27,56 +28,46 @@ Select a firewall to add IPs:
    4) iptables
    5) ipset+iptables
    6) nftables
-Firewall: [YOUR INPUT]
+Firewall: [Enter your choice]
 ```
 
-Also, you can pass the CDN's name and Firewall's name in arguments:
+You can also pass the CDN and firewall names directly as arguments:
 
 ```bash
-bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh) cloudflare ufw
+bash <(curl -sSkL https://github.com/arian24b/allowcdn/raw/main/src/whitelister.sh) cloudflare ufw
 ```
 
-### Auto-update
+## Auto-update Setup
 
-You can create a cronjob to update the rules automatically.
+To keep your firewall rules updated automatically, you can create a cron job. For example:
 
-Examples:
-
-* Update UFW rules every 6 hours
+- **Update UFW rules every 6 hours:**
 
 ```bash
-0 */6 * * * bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh) cloudflare ufw >/dev/null 2>&1
+0 */6 * * * bash <(curl -sSkL https://github.com/arian24b/allowcdn/raw/main/src/whitelister.sh) cloudflare ufw >/dev/null 2>&1
 ```
 
-* Update CSF rules every day at 1:00
+- **Update CSF rules every day at 1:00 AM:**
 
 ```bash
-0 1 * * * bash <(curl -sSkL https://github.com/arian24b/allow-cdn-ips/raw/main/src/whitelister.sh) arvancloud csf >/dev/null 2>&1
+0 1 * * * bash <(curl -sSkL https://github.com/arian24b/allowcdn/raw/main/src/whitelister.sh) arvancloud csf >/dev/null 2>&1
 ```
 
 ## Supported CDNs
 
-We currently support these CDN:
+- cloudflare
+- arvancloud
+- iranserver
 
-* cloudflare
-* arvancloud
-* iranserver
+## Supported Firewalls
 
+- UFW
+- CSF
+- firewalld
+- iptables
+- ipset+iptables
+- nftables
 
-## Supported firewalls
+## Need More?
 
-We currently support these firewalls:
-
-* UFW
-* CSF
-* firewalld
-* iptables
-* ipset+iptables
-* nftables
-
-### Need more?
-
-If you use a firewall that is not listed here, you can:
-
-* Create an issue
-* Send a pull request
+If your firewall is not listed, you can open an issue or submit a pull request to add support.

@@ -1,201 +1,204 @@
 #!/usr/bin/env bash
-# -*- coding: utf-8 -*-
-# Auther: ArianOmrani - https://github.com/arian24b/
-# git repository: https://github.com/arian24b/AllowCDN-IPs
+set -euo pipefail
+IFS=$'\n\t'
 
-set -e
-# set -x
-
+# Clear terminal
 clear
 
-# Load Template
+# Load helper functions and messages from the template
 source <(curl -SskL https://github.com/arian24b/server_management_public/raw/main/template.sh)
 
-# Check root access
+# Check for root privileges
 CheckPrivileges
 
-# Use the first argument or Ask the user to select CDN
-if [[ -z $1 ]]; then
-  echo "Select a CDN to add IPs:"
-  echo "   1) cloudflare"
-  echo "   2) iranserver"
-  echo "   3) arvancloud"
-  read -r -p "CDN: " cdnoption
+# Helper: prompt user with options
+choose_option() {
+  local prompt="$1"
+  shift
+  local options=("$@")
+  local i=1 choice
+  echo "$prompt"
+  for option in "${options[@]}"; do
+    echo "   $i) $option"
+    ((i++))
+  done
+  read -r -p "Choice: " choice
+  echo "$choice"
+}
+
+# Get the CDN selection from first argument or prompt the user
+if [[ ${1-} == "" ]]; then
+  cdnoption=$(choose_option "Select a CDN to add IPs:" "cloudflare" "iranserver" "arvancloud")
 else
   cdnoption=$1
 fi
 
 clear
 
-# Use the second argument or Ask the user to select firewall
-if [[ -z $2 ]]; then
-  echo "Select a Firewall to add IPs:"
-  echo "   1) UFW"
-  echo "   2) CSF"
-  echo "   3) firewalld"
-  echo "   4) iptables"
-  echo "   5) ipset+iptables"
-  echo "   6) nftables"
-  read -r -p "Firewall: " firewalloption
+# Get the Firewall selection from second argument or prompt the user
+if [[ ${2-} == "" ]]; then
+  firewalloption=$(choose_option "Select a Firewall to add IPs:" "UFW" "CSF" "firewalld" "iptables" "ipset" "nftables")
 else
   firewalloption=$2
 fi
 
 clear
 
-# Process user input
+# Map CDN selection to name and IP list URL
 case "$cdnoption" in
-1 | cloudflare)
-  CDNNAME="cloudflare"
-  IPsLink="https://www.cloudflare.com/ips-v4" # TODO add ips-v6 https://www.cloudflare.com/ips-v6
-  ;;
-2 | iranserver)
-  CDNNAME="iranserver"
-  IPsLink="https://ips.f95.com/ip.txt"
-  ;;
-3 | arvancloud)
-  CDNNAME="arvancloud"
-  IPsLink="https://www.arvancloud.ir/fa/ips.txt"
-  ;;
-*)
-  abort "The selected CDN is not valid."
-  ;;
+  1|cloudflare)
+    CDNNAME="cloudflare"
+    IPsLink="https://www.cloudflare.com/ips-v4" # TODO: add IPv6 list if needed
+    ;;
+  2|iranserver)
+    CDNNAME="iranserver"
+    IPsLink="https://ips.f95.com/ip.txt"
+    ;;
+  3|arvancloud)
+    CDNNAME="arvancloud"
+    IPsLink="https://www.arvancloud.ir/fa/ips.txt"
+    ;;
+  *)
+    abort "The selected CDN is not valid."
+    ;;
 esac
 
 Normal_msg "Downloading $CDNNAME IPs list..."
 
+# Create temporary file to store downloaded IPs list
 IPsFile=$(mktemp /tmp/ar-ips.XXXXXX)
-# Delete the temp file if the script stopped for any reason
-trap 'rm -f ${IPsFile}' 0 2 3 15
+trap 'rm -f "${IPsFile}"' EXIT INT TERM
 
-if [[ -x "$(command -v curl)" ]]; then
-  downloadStatus=$(curl "${IPsLink}" -o "${IPsFile}" -L -s -w "%{http_code}\n")
-elif [[ -x "$(command -v wget)" ]]; then
-  downloadStatus=$(wget "${IPsLink}" -O "${IPsFile}" --server-response 2>&1 | awk '/^  HTTP/{print $2}' | tail -n1)
+# Download the IP list using curl or wget
+if command -v curl >/dev/null; then
+  downloadStatus=$(curl -sSL -w "%{http_code}" -o "${IPsFile}" "${IPsLink}")
+elif command -v wget >/dev/null; then
+  downloadStatus=$(wget -qO "${IPsFile}" --server-response "${IPsLink}" 2>&1 | awk '/^  HTTP/{print $2}' | tail -n1)
 else
   Abort "curl or wget is required to run this script."
 fi
 
 if [[ "$downloadStatus" -ne 200 ]]; then
-  Abort "Downloading the $CDNNAME's IP list wasn't successful. status code: ${downloadStatus}"
-else
-  IPs=$(cat "$IPsFile")
+  Abort "Downloading $CDNNAME IP list failed. Status code: ${downloadStatus}"
 fi
 
-Normal_msg "Adding $CDNNAME's IPs to the selected Firewall..."
+IPs=$(<"$IPsFile")
+Normal_msg "Adding $CDNNAME IPs to the selected Firewall..."
 
-# Process user input
+# Process firewall selection
 case "$firewalloption" in
-1 | ufw)
-  if [[ ! -x "$(command -v ufw)" ]]; then
-    Abort "ufw is not installed."
-  fi
+  1|ufw)
+    if ! command -v ufw >/dev/null; then
+      Abort "ufw is not installed."
+    fi
 
-  Yellow_msg "Delete old $CDNNAME IPs rules if exist"
+    Yellow_msg "Deleting old $CDNNAME rules in ufw"
+    # Delete rules that have the CDNNAME in comments
+    ufw status numbered | grep "$CDNNAME" | sed 's/^\[\([0-9]*\)\].*/\1/' | sort -rn | while read -r num; do
+      ufw --force delete "$num"
+    done
 
-  ufw show added | awk '/$CDNNAME/{ gsub("ufw","ufw delete",$0); system($0)}'
+    Normal_msg "Adding new $CDNNAME rules to ufw"
+    for IP in ${IPs}; do
+      ufw allow from "$IP" comment "$CDNNAME"
+    done
+    ufw reload
+    ;;
+  2|csf)
+    if ! command -v csf >/dev/null; then
+      Abort "csf is not installed."
+    fi
 
-  Normal_msg "Adding new $CDNNAME rules"
+    Yellow_msg "Deleting old $CDNNAME rules in csf"
+    awk '!/'"$CDNNAME"'/' /etc/csf/csf.allow > /tmp/csf.allow.tmp && mv /tmp/csf.allow.tmp /etc/csf/csf.allow
 
-  for IP in ${IPs}; do
-    sudo ufw allow from "$IP" to any comment "$CDNNAME"
-  done
+    Normal_msg "Adding new $CDNNAME rules to csf"
+    for IP in ${IPs}; do
+      csf -a "$IP"
+    done
+    csf -r
+    ;;
+  3|firewalld)
+    if ! command -v firewall-cmd >/dev/null; then
+      Abort "firewalld is not installed."
+    fi
 
-  sudo ufw reload
-  ;;
-2 | csf)
-  if [[ ! -x "$(command -v csf)" ]]; then
-    Abort "csf is not installed."
-  fi
+    Yellow_msg "Deleting old $CDNNAME zone in firewalld"
+    if firewall-cmd --permanent --get-zones | grep -qw "$CDNNAME"; then
+      firewall-cmd --permanent --delete-zone="$CDNNAME"
+    fi
 
-  Yellow_msg "Delete old $CDNNAME IPs rules if exist"
-  awk '!/$CDNNAME/' /etc/csf/csf.allow > csf.t && mv csf.t /etc/csf/csf.allow
+    Normal_msg "Creating new $CDNNAME zone in firewalld"
+    firewall-cmd --permanent --new-zone="$CDNNAME"
+    for IP in ${IPs}; do
+      firewall-cmd --permanent --zone="$CDNNAME" --add-rich-rule="rule family='ipv4' source address='$IP' port port=80 protocol='tcp' accept"
+      firewall-cmd --permanent --zone="$CDNNAME" --add-rich-rule="rule family='ipv4' source address='$IP' port port=443 protocol='tcp' accept"
+    done
+    firewall-cmd --reload
+    ;;
+  4|iptables)
+    if ! command -v iptables >/dev/null; then
+      Abort "iptables is not installed."
+    fi
 
-  Normal_msg "Adding new $CDNNAME rules"
-  for IP in ${IPs}; do
-    sudo csf -a "$IP"
-  done
+    Yellow_msg "Deleting old $CDNNAME rules in iptables"
+    CURRENT_RULES=$(iptables -L INPUT --line-numbers | grep "$CDNNAME" | awk '{print $1}' | sort -rn)
+    for rule in $CURRENT_RULES; do
+      iptables -D INPUT "$rule"
+    done
 
-  sudo csf -r
-  ;;
-3 | firewalld)
-  if [[ ! -x "$(command -v firewall-cmd)" ]]; then
-    Abort "firewalld is not installed."
-  fi
+    Normal_msg "Adding new $CDNNAME rules in iptables"
+    for IP in ${IPs}; do
+      iptables -A INPUT -s "$IP" -m comment --comment "$CDNNAME" -j ACCEPT
+    done
+    ;;
+  5|ipset)
+    if ! command -v ipset >/dev/null; then
+      Abort "ipset is not installed."
+    fi
+    if ! command -v iptables >/dev/null; then
+      Abort "iptables is not installed."
+    fi
 
-  Yellow_msg "Delete old $CDNNAME zone if exist"
-  if [[ $(sudo firewall-cmd --permanent --list-all-zones | grep $CDNNAME) ]]; then sudo firewall-cmd --permanent --delete-zone=$CDNNAME; fi
+    Yellow_msg "Deleting old $CDNNAME ipset if exists"
+    if ipset list | grep -q "^$CDNNAME-ipset"; then
+      iptables -D INPUT -m set --match-set "$CDNNAME-ipset" src -j ACCEPT || true
+      sleep 0.5
+      ipset destroy "$CDNNAME-ipset"
+    fi
 
-  Normal_msg "Adding new $CDNNAME zone"
-  sudo firewall-cmd --permanent --new-zone=$CDNNAME
-  for IP in ${IPs}; do
-    sudo firewall-cmd --permanent --zone=$CDNNAME --add-rich-rule='rule family="ipv4" source address='"$IP"' port port=80 protocol="tcp" accept'
-    sudo firewall-cmd --permanent --zone=$CDNNAME --add-rich-rule='rule family="ipv4" source address='"$IP"' port port=443 protocol="tcp" accept'
-  done
+    Normal_msg "Creating new $CDNNAME ipset"
+    ipset create "$CDNNAME-ipset" hash:net
+    for IP in ${IPs}; do
+      ipset add "$CDNNAME-ipset" "$IP"
+    done
+    if ! iptables -L INPUT -n | grep -q "$CDNNAME-ipset"; then
+      iptables -I INPUT -m set --match-set "$CDNNAME-ipset" src -j ACCEPT
+    fi
+    ;;
+  6|nftables)
+    if ! command -v nft >/dev/null; then
+      Abort "nftables is not installed."
+    fi
 
-  sudo firewall-cmd --reload
-  ;;
-4 | iptables)
-  if [[ ! -x "$(command -v iptables)" ]]; then
-    Abort "iptables is not installed."
-  fi
+    Yellow_msg "Ensuring 'inet filter' table exists"
+    if ! nft list tables inet 2>/dev/null | grep -q '^table inet filter'; then
+      nft add table inet filter
+    fi
 
-  Yellow_msg "Delete old $CDNNAME rules if exist"
-  CURRENT_RULES=$(iptables --line-number -nL INPUT | grep comment_here | awk '{print $1}' | tac)
-  for rule in $CURRENT_RULES; do
-    sudo iptables -D INPUT $rule
-  done
+    Yellow_msg "Deleting old $CDNNAME chain in nftables"
+    if nft list chain inet filter "$CDNNAME" &>/dev/null; then
+      nft delete chain inet filter "$CDNNAME"
+    fi
 
-  Normal_msg "Adding new $CDNNAME rules"
-  for IP in ${IPs}; do
-    sudo iptables -A INPUT -s "$IP" -m comment --comment "$CDNNAME" -j ACCEPT
-  done
-  ;;
-5 | ipset)
-  if [[ ! -x "$(command -v ipset)" ]]; then
-    Abort "ipset is not installed."
-  fi
-  if [[ ! -x "$(command -v iptables)" ]]; then
-    Abort "iptables is not installed."
-  fi
-
-  Yellow_msg "Delete old $CDNNAME ipset if exist"
-  sudo ipset list | grep -q "$CDNNAME-ipset" ; greprc=$?
-  if [[ "$greprc" -eq 0 ]]; then
-    sudo iptables -D INPUT -m set --match-set $CDNNAME-ipset src -j ACCEPT 2>/dev/null
-    sleep 0.5
-    sudo ipset destroy $CDNNAME-ipset
-  fi
-
-  Normal_msg "Adding new $CDNNAME ipset"
-  ipset create $CDNNAME-ipset hash:net
-  for IP in ${IPs}; do
-    ipset add $CDNNAME-ipset "$IP"
-  done
-  sudo iptables -nvL | grep -q "$CDNNAME-ipset"; exitcode=$?
-  if [[ "$exitcode" -eq 1 ]]; then
-    sudo iptables -I INPUT -m set --match-set $CDNNAME-ipset src -j ACCEPT
-  fi
-  ;;
-6 | nftables)
-  if [[ ! -x "$(command -v nft)" ]]; then
-    Abort "nftables is not installed."
-  fi
-  # create filter table
-  nft add table inet filter
-
-  Yellow_msg "Delete old $CDNNAME chain if exist"
-  if [[ $(sudo nft list ruleset | grep $CDNNAME) ]]; then sudo nft delete chain inet filter $CDNNAME; fi
-
-  Normal_msg "Adding new $CDNNAME chain"
-  sudo nft add chain inet filter $CDNNAME '{ type filter hook input priority 0; }'
-  # concat all IPs to a string and remove blank line and separate with comma
-  IPsString=$(echo "$IPs" | tr '\n' ',' | sed 's/,$//')
-  sudo nft insert rule inet filter $CDNNAME counter ip saddr "{ $IPsString }" accept
-  ;;
-*)
-  Abort "The selected firewall is not valid."
-  ;;
+    Normal_msg "Creating new $CDNNAME chain in nftables"
+    nft add chain inet filter "$CDNNAME" "{ type filter hook input priority 0 \; }"
+    IPsString=$(echo "$IPs" | tr '\n' ',' | sed 's/,\s*$//')
+    nft add rule inet filter "$CDNNAME" ip saddr "{ $IPsString }" counter accept
+    ;;
+  *)
+    Abort "The selected firewall is not valid."
+    ;;
 esac
 
 Green_msg "DONE!"
