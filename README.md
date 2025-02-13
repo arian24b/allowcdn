@@ -71,3 +71,7 @@ To keep your firewall rules updated automatically, you can create a cron job. Fo
 ## Need More?
 
 If your firewall is not listed, you can open an issue or submit a pull request to add support.
+
+## Other Languages
+
+For a Farsi version of this document, please see [README_fa.md](/home/arian/code/allowcdn/README_fa.md).
